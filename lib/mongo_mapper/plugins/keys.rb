@@ -5,8 +5,10 @@ module MongoMapper
   module Plugins
     module Keys
       extend ActiveSupport::Concern
+      include ::ActiveModel::AttributeMethods
 
       included do
+        # atribute_method_suffix('', '=', '?')
         key :_id, ObjectId
       end
 
@@ -71,6 +73,10 @@ module MongoMapper
           end.allocate.initialize_from_database(attrs)
         end
 
+        def defaulted_keys
+          keys.values.select { |key| key.default? }
+        end
+
         private
           def key_accessors_module_defined?
             if method(:const_defined?).arity == 1 # Ruby 1.9 compat check
@@ -92,10 +98,6 @@ module MongoMapper
             accessors_module.module_eval <<-end_eval
               def #{key.name}
                 read_key(:#{key.name})
-              end
-
-              def #{key.name}_before_type_cast
-                read_key_before_type_cast(:#{key.name})
               end
 
               def #{key.name}=(value)
@@ -162,14 +164,21 @@ module MongoMapper
 
       module InstanceMethods
         def initialize(attrs={})
+          @_new = true unless defined?(@_new)
+          initialize_attributes_with_defaults
+          if @_new
+            self.attributes = attrs
+          else
+            attrs.each do |key, value|
+              self[key] = value
+            end
+          end
           default_id_value(attrs)
-          @_new = true
-          assign(attrs)
         end
 
         def initialize_from_database(attrs={})
           @_new = false
-          load_from_database(attrs)
+          send(:initialize, attrs)
           self
         end
 
@@ -177,12 +186,11 @@ module MongoMapper
           !new? && !destroyed?
         end
 
-        def attributes=(attrs)
-          return if attrs.blank?
-
+        def attributes=(attrs, *)
           attrs.each_pair do |key, value|
-            if respond_to?(:"#{key}=")
-              self.send(:"#{key}=", value)
+            writer_method = "#{key}="
+            if respond_to?(writer_method)
+              send(writer_method, value)
             else
               self[key] = value
             end
@@ -190,6 +198,10 @@ module MongoMapper
         end
 
         def attributes
+          @attributes
+        end
+
+        def to_mongo
           HashWithIndifferentAccess.new.tap do |attrs|
             keys.each_pair do |name, key|
               value = key.set(self[key.name])
@@ -207,8 +219,8 @@ module MongoMapper
             end
           end
         end
-        alias :to_mongo :attributes
 
+        # TODO: deprecate me
         def assign(attrs={})
           self.attributes = attrs
         end
@@ -272,14 +284,10 @@ module MongoMapper
         end
 
         private
-          def load_from_database(attrs)
-            return if attrs.blank?
-            attrs.each do |key, value|
-              if respond_to?(:"#{key}=") && !self.class.key?(key)
-                self.send(:"#{key}=", value)
-              else
-                self[key] = value
-              end
+          def initialize_attributes_with_defaults
+            @attributes = {}
+            self.class.defaulted_keys.each do |key|
+              @attributes[key.name] = key.default
             end
           end
 
@@ -293,23 +301,24 @@ module MongoMapper
             end
           end
 
-          def read_key(key_name)
-            if key = keys[key_name.to_s]
-              value = key.get(instance_variable_get(:"@#{key_name}"))
-              set_parent_document(key, value)
-              instance_variable_set(:"@#{key_name}", value)
-            end
+          def attribute(key)
+            @attributes[key.to_s]
+          end
+          alias read_attribute attribute
+          alias read_key attribute
+
+          def attribute=(key, value)
+            @attributes[key.to_s] = attribute_definition(key).try(:get, value)
+          end
+          alias write_attribute attribute=
+          alias write_key attribute=
+
+          def attribute_definition(key)
+            self.class.keys[key.to_s]
           end
 
-          def read_key_before_type_cast(name)
-            instance_variable_get(:"@#{name}_before_type_cast")
-          end
-
-          def write_key(name, value)
-            key = keys[name.to_s]
-            set_parent_document(key, value)
-            instance_variable_set :"@#{name}_before_type_cast", value
-            instance_variable_set :"@#{name}", key.set(value)
+          def attribute_method?(key)
+            self.class.key?(key)
           end
       end
     end

@@ -7,7 +7,7 @@ module MongoMapper
       end
 
       def from_mongo(value)
-        value.nil? ? nil : value.to_s
+        to_mongo(value)
       end
     end
   end

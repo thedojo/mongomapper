@@ -3,13 +3,12 @@ module MongoMapper
   module Plugins
     module Keys
       class Key
-        attr_accessor :name, :type, :options, :default_value
+        attr_accessor :name, :type, :options
 
         def initialize(*args)
           options = args.extract_options!
           @name, @type = args.shift.to_s, args.shift
           self.options = (options || {}).symbolize_keys
-          self.default_value = self.options[:default]
         end
 
         def ==(other)
@@ -29,17 +28,23 @@ module MongoMapper
           type == Integer || type == Float
         end
 
-        def get(value)
-          if value.nil? && !default_value.nil?
-            if default_value.respond_to?(:call)
-              return default_value.call
-            else
-              # Using Marshal is easiest way to get a copy of mutable objects
-              # without getting an error on immutable objects
-              return Marshal.load(Marshal.dump(default_value))
-            end
-          end
+        def default?
+          options.key?(:default) || type.respond_to?(:mongo_default)
+        end
 
+        def default
+          if options.key?(:default)
+            if options[:default].respond_to?(:call)
+              options[:default].call
+            else
+              options[:default].duplicable? ? options[:default].dup : options[:default]
+            end
+          else
+            type.respond_to?(:mongo_default) ? type.mongo_default : nil
+          end
+        end
+
+        def get(value)
           if options[:typecast].present?
             type.from_mongo(value).map! { |v| typecast_class.from_mongo(v) }
           else

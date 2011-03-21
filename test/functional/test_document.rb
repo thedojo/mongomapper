@@ -218,8 +218,12 @@ class DocumentTest < Test::Unit::TestCase
     end
 
     should "reset belongs_to association" do
+      @instance.logger.info '1 ***************'
+      @instance.logger.info @instance.foo_id.inspect
       @instance.foo = nil
+      @instance.logger.info '2 ***************'
       @instance.reload
+      @instance.logger.info '3 ***************'
       @instance.foo.should_not be_nil
     end
 

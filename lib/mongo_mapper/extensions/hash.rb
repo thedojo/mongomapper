@@ -2,8 +2,12 @@
 module MongoMapper
   module Extensions
     module Hash
+      def mongo_default
+        HashWithIndifferentAccess.new
+      end
+
       def from_mongo(value)
-        HashWithIndifferentAccess.new(value || {})
+        value.nil? ? mongo_default : HashWithIndifferentAccess.new(value)
       end
     end
   end

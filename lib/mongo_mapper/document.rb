@@ -5,6 +5,7 @@ module MongoMapper
     extend Plugins
     extend Support::DescendantAppends
 
+    include Plugins::Keys
     include Plugins::ActiveModel
     include Plugins::Document
     include Plugins::Querying # for now needs to be before associations (save_to_collection)
@@ -15,7 +16,6 @@ module MongoMapper
     include Plugins::Equality
     include Plugins::Inspect
     include Plugins::Indexes
-    include Plugins::Keys
     include Plugins::Dirty # for now dirty needs to be after keys
     include Plugins::Logger
     include Plugins::Modifiers

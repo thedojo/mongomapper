@@ -5,6 +5,10 @@ module MongoMapper
       def to_mongo(value)
         value.nil? ? nil : value.to_f
       end
+
+      def from_mongo(value)
+        to_mongo(value)
+      end
     end
   end
 end
